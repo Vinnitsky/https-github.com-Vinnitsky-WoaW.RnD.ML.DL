@@ -3,6 +3,8 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
 using System.Diagnostics;
 using WoaW.RnD.DL.NNFramework;
+using System.IO;
+using System.Text;
 
 namespace WoaW.RnD.DL.NeuralNetworks.UnitTests
 {
@@ -193,8 +195,8 @@ namespace WoaW.RnD.DL.NeuralNetworks.UnitTests
             network.BackPropagation();
 
             Assert.AreEqual(0.69, Math.Round(network["Output1"].Value, precision));
-            Assert.AreEqual(0.49, Math.Round(network["Output1"].Dendrites[0].Value, precision));
-            Assert.AreEqual(0.51, Math.Round(network["Output1"].Dendrites[1].Value, precision));
+            Assert.AreEqual(0.51, Math.Round(network["Output1"].Dendrites[0].Value, precision));
+            Assert.AreEqual(0.53, Math.Round(network["Output1"].Dendrites[1].Value, precision));
 
             Assert.AreEqual(0.77, Math.Round(network["Hidden1"].Value, precision));
             Assert.AreEqual(0.79, Math.Round(network["Hidden1"].Dendrites[0].Value, precision));
@@ -249,8 +251,12 @@ namespace WoaW.RnD.DL.NeuralNetworks.UnitTests
             var network = TestContext.Properties["Network"] as Network;
             var teach_set = TestContext.Properties["set"] as int[,];
 
+            FileStream fs = File.Create(@"..\..\..\R\WoaW.RnD.DL.Analysis\data.txt");
+
             for (int j = 0; j < 5000; j++)
             {
+                var actualData = new List<float>();
+
                 for (int i = 0; i < teach_set.GetLength(0); i++)
                 {
                     network["Input1"].Value = teach_set[i, 0];
@@ -260,10 +266,27 @@ namespace WoaW.RnD.DL.NeuralNetworks.UnitTests
 
                     network.Teach();
 
-                    var r = TeachAssesment(network.Acson.Value, teach_set[i, 0]);
-                    Debug.WriteLine(string.Format("Epoch:{0} iteration:{1} teach assessment:{2}", j, i, Math.Round(r, 5)));
+                    actualData.Add(network.Acson.Value);
+                    //var t = network.Acson.Value - teach_set[i, 3];
+                    //Debug.WriteLine(string.Format("Epoch:{0} iteration:{1} teach assessment:{2}", j, i, Math.Round(t, 5)));
+
+                    //var r = TeachAssesmentMSE(new[] { network.Acson.Value}, new [] { (float)teach_set[i, 3]});
+                    //WriteToFile(fs, j, i, network.Acson.Value, teach_set[i, 3]);
+
                 }
+
+                //var expectedData = new List<float>();
+                //for (int i = 0; i < teach_set.GetLength(0); i++)
+                //{
+                //    expectedData.Add(teach_set[i, 3]);
+                //}
+
+                //var r = TeachAssesmentMSE(new[] { network.Acson.Value }, new[] { (float)teach_set[j, 3] });
+                //Debug.WriteLine(string.Format("Epoch:{0} teach assessment:{1}", j, Math.Round(r, 5)));
             }
+            fs.Flush();
+            fs.Close();
+
             Trace.WriteLine("study process is finished");
 
             //network.Dump();
@@ -292,11 +315,26 @@ namespace WoaW.RnD.DL.NeuralNetworks.UnitTests
 
             var forward = network.Slise();
             network.Dump(network.Epoch, forward);
+        }
 
+        private void WriteToFile(FileStream fs, int j, int i, float a, float e)
+        {
+            var sw = new StreamWriter(fs);
+            sw.WriteLine(string.Format("{0} {1} {2} {3}", j, i, a, e));
+            sw.Flush();
+            // writing data in string
+            //string dataasstring = "data"; //your data
+            //byte[] info = new UTF8Encoding(true).GetBytes(dataasstring);
+            //fs.Write(info, 0, info.Length);
+
+            //// writing data in bytes already
+            //byte[] data = new byte[] { 0x0 };
+            //fs.Write(data, 0, data.Length);
         }
         private void TraineOnSet_SuccessTest_Init()
         {
-            TestContext.Properties["Network"] = BuildNetworkWithRundomWeight(0.07F, 1);
+            //TestContext.Properties["Network"] = BuildNetworkWithRundomWeight(0.07F, 1);
+            TestContext.Properties["Network"] = BuildNetworkWithRundomWeightWithBiasNeuron(0.07F, 1);
 
             TestContext.Properties["set"] = new int[,] {
                 { 0,0,0,0},
@@ -309,11 +347,31 @@ namespace WoaW.RnD.DL.NeuralNetworks.UnitTests
                 { 1,1,1,1},
             };
         }
-        private double TeachAssesment(double x, double actual)
+        private float TeachAssesmentMSE(float[] x, float[] actual)
         {
+            if (x.Length != actual.Length)
+                throw new ArgumentException("x.Count == actual.Count");
+
             //среднекрвадратическое отклонение
-            var p = Math.Pow(actual - x, 2);
-            return Math.Sqrt(p);
+            var r = 0F;
+            for (int i = 0; i < actual.Length; i++)
+            {
+                r += (float)Math.Pow(x[i] - actual[i], 2);
+            }
+            return r / actual.Length;
+        }
+        private float TeachAssesmentRootMSE(List<float> x, List<float> actual)
+        {
+            if (x.Count != actual.Count)
+                throw new ArgumentException("x.Count == actual.Count");
+
+            //среднекрвадратическое отклонение
+            var r = 0F;
+            for (int i = 0; i < actual.Count; i++)
+            {
+                r += (float)Math.Pow(actual[i] - x[i], 2);
+            }
+            return (float)Math.Sqrt(r / actual.Count);
         }
 
         [TestMethod]
@@ -381,23 +439,66 @@ namespace WoaW.RnD.DL.NeuralNetworks.UnitTests
             #region level 2 - hidden
             var h1 = new Neuron(0, NeuronType.Heidien, "Hidden1");
             h1.Dendrites
-                .ConnectedTo(h1, i1, (float)Math.Round(rand.NextDouble()))
-                .ConnectedTo(h1, i2, (float)Math.Round(rand.NextDouble()))
-                .ConnectedTo(h1, i3, (float)Math.Round(rand.NextDouble()));
+                .ConnectedTo(h1, i1, (float)rand.NextDouble())
+                .ConnectedTo(h1, i2, (float)rand.NextDouble())
+                .ConnectedTo(h1, i3, (float)rand.NextDouble());
             net.Neurons.Add(h1);
             var h2 = new Neuron(0, NeuronType.Heidien, "Hidden2");
             h2.Dendrites
-                .ConnectedTo(h2, i1, (float)Math.Round(rand.NextDouble()))
-                .ConnectedTo(h2, i2, (float)Math.Round(rand.NextDouble()))
-                .ConnectedTo(h2, i3, (float)Math.Round(rand.NextDouble()));
+                .ConnectedTo(h2, i1, (float)rand.NextDouble())
+                .ConnectedTo(h2, i2, (float)rand.NextDouble())
+                .ConnectedTo(h2, i3, (float)rand.NextDouble());
             net.Neurons.Add(h2);
             #endregion
 
             #region level 1 - output
             var o1 = new Neuron(0, NeuronType.Output, "Output1");
             o1.Dendrites
-                .ConnectedTo(o1, h1, (float)Math.Round(rand.NextDouble()))
-                .ConnectedTo(o1, h2, (float)Math.Round(rand.NextDouble()));
+                .ConnectedTo(o1, h1, (float)rand.NextDouble())
+                .ConnectedTo(o1, h2, (float)rand.NextDouble());
+            net.Neurons.Add(o1);
+            #endregion
+
+            return net;
+        }
+        private Network BuildNetworkWithRundomWeightWithBiasNeuron(float learningRate, uint teachingNumber)
+        {
+            var net = new Network(learningRate, teachingNumber);
+
+            Random rand = new Random(DateTime.Now.Millisecond);
+
+            #region level 1 - input
+            var i1 = new Neuron(0, NeuronType.Input, "Input1");
+            net.Neurons.Add(i1);
+            var i2 = new Neuron(0, NeuronType.Input, "Input2");
+            net.Neurons.Add(i2);
+            var i3 = new Neuron(0, NeuronType.Input, "Input3");
+            net.Neurons.Add(i3);
+            #endregion
+
+            #region level 2 - hidden
+            var b1 = new Neuron(0, NeuronType.Heidien, "Bias1");
+            var h1 = new Neuron(0, NeuronType.Heidien, "Hidden1");
+            h1.Dendrites
+                .ConnectedTo(h1, i1, (float)rand.NextDouble())
+                .ConnectedTo(h1, i2, (float)rand.NextDouble())
+                .ConnectedTo(h1, i3, (float)rand.NextDouble())
+                .ConnectedTo(h1, b1, (float)rand.NextDouble());
+            net.Neurons.Add(h1);
+            var h2 = new Neuron(0, NeuronType.Heidien, "Hidden2");
+            h2.Dendrites
+                .ConnectedTo(h2, i1, (float)rand.NextDouble())
+                .ConnectedTo(h2, i2, (float)rand.NextDouble())
+                .ConnectedTo(h2, i3, (float)rand.NextDouble())
+                .ConnectedTo(h2, b1, (float)rand.NextDouble());
+            net.Neurons.Add(h2);
+            #endregion
+
+            #region level 1 - output
+            var o1 = new Neuron(0, NeuronType.Output, "Output1");
+            o1.Dendrites
+                .ConnectedTo(o1, h1, (float)rand.NextDouble())
+                .ConnectedTo(o1, h2, (float)rand.NextDouble());
             net.Neurons.Add(o1);
             #endregion
 

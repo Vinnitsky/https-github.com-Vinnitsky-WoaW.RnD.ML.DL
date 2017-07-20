@@ -73,7 +73,7 @@ namespace WoaW.RnD.DL.NNFramework
                 BackPropagation();
                 var backward = Slise();
 
-                Dump(Epoch, forward, backward);
+                //Dump(Epoch, forward, backward);
                 Epoch += 1;
             }
         }
@@ -98,55 +98,54 @@ namespace WoaW.RnD.DL.NNFramework
         {
             #region round
             {
-                var neuron = _neurons[_neurons.Count - 1];
-                neuron.Error = Acson.Value - Expected;
-                if (neuron.Error == 0)
+                var outputNeuron = _neurons[_neurons.Count - 1]; //get output neuron
+                //outputNeuron.Error = outputNeuron.Acson.Value - Expected;
+                outputNeuron.Error = Expected - outputNeuron.Acson.Value;
+
+                if (outputNeuron.Error == 0)
                     return;
 
-                var r = neuron.Acson.Value;
-                neuron.DeltaWeight = neuron.Error * neuron.DerivativeOfActivationFunction(r);
-
-                foreach (var dendrite in neuron.Dendrites)
+                for (int i = _neurons.Count - 2; i >= 0; i--)
                 {
-                    dendrite.Value = dendrite.Value - dendrite.Acson.Value * neuron.DeltaWeight * LearningRate;
+                    var neuron = _neurons[i];
+                    if (neuron.Type == NeuronType.Input && neuron.Type == NeuronType.Bias)
+                        continue;
+
+                    neuron.CalculateError();
                 }
             }
             #endregion
 
-            for (int i = _neurons.Count - 2; i >= 0; i--)
+            for (int i = 0; i < _neurons.Count; i++)
             {
                 var neuron = _neurons[i];
-                if (neuron.Type == NeuronType.Input)
+                if (neuron.Type == NeuronType.Input && neuron.Type == NeuronType.Bias)
                     continue;
-
-                var r = neuron.Acson.Value;
 
                 foreach (var dendrite in neuron.Dendrites)
                 {
-                    neuron.Error = dendrite.Value * neuron.Acson.Dendrites.FirstOrDefault().Neuron.DeltaWeight;
-                    neuron.DeltaWeight = neuron.Error * neuron.DerivativeOfActivationFunction(r);
-                    dendrite.Value = dendrite.Value - dendrite.Acson.Value * neuron.DeltaWeight * LearningRate;
+                    var deltaWeight = neuron.Error * neuron.DerivativeOfActivationFunction(neuron.Value);
+                    dendrite.Value = dendrite.Value + dendrite.Acson.Value * LearningRate * deltaWeight;
                 }
-                //prev_delta_weght = delta_weght; //оставляем глобальный или меняем всякий раз для новго слоя 
             }
         }
 
         public Tuple<Tuple<string, float>, List<float>>[] Slise()
         {
-            var r = new Tuple<Tuple<string, float>, List<float>>[_neurons.Count];
+            var data = new Tuple<Tuple<string, float>, List<float>>[_neurons.Count];
 
-            for (int j = 0; j < _neurons.Count; j++)
+            for (int r = 0; r < _neurons.Count; r++)
             {
-                var neuron = _neurons[j];
-                r[j] = new Tuple<Tuple<string, float>, List<float>>(new Tuple<string, float>(neuron.Id, neuron.Value), new List<float>());
+                var neuron = _neurons[r];
+                data[r] = new Tuple<Tuple<string, float>, List<float>>(new Tuple<string, float>(neuron.Id, neuron.Value), new List<float>());
 
-                for (int i = 0; i < neuron.Dendrites.Count; i++)
+                for (int c = 0; c < neuron.Dendrites.Count; c++)
                 {
-                    var dendrite = neuron.Dendrites[i];
-                    r[j].Item2.Add(dendrite.Value);
+                    var dendrite = neuron.Dendrites[c];
+                    data[r].Item2.Add(dendrite.Value);
                 }
             }
-            return r;
+            return data;
         }
         public void Dump(uint epoch,
             Tuple<Tuple<string, float>, List<float>>[] forward,
@@ -163,7 +162,7 @@ namespace WoaW.RnD.DL.NNFramework
                 }
                 forward_str = forward_str + string.Format("\t{0} v:{1} {2}" + System.Environment.NewLine, f.Item1.Item1, System.Math.Round(f.Item1.Item2, _outputPresision), t);
             }
-            System.Diagnostics.Trace.Write("<-" + forward_str);
+            System.Diagnostics.Trace.Write("->" + forward_str);
 
             if (backward == null)
                 return;

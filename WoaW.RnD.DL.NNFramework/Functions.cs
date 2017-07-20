@@ -9,7 +9,8 @@
         }
         public static float Derivative(float x)
         {
-            return (Activation(x) * (1 - Activation(x)));
+            return (x * (1 - x));
+            //return (Activation(x) * (1 - Activation(x)));
         }
     }
 }

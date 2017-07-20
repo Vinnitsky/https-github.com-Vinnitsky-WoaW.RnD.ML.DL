@@ -10,7 +10,8 @@ namespace WoaW.RnD.DL.NNFramework
         Undefined = 0,
         Input = 1,
         Heidien = 2,
-        Output = 3
+        Output = 3,
+        Bias = 4
     }
 
     public class Neuron
@@ -46,31 +47,49 @@ namespace WoaW.RnD.DL.NNFramework
         public string Id { get; set; }
         public Func<float, float> ActivationFunction { get; set; }
         public Func<float, float> DerivativeOfActivationFunction { get; set; }
-        public float Value { get { return _value; } set { _value = value; Acson.Value = value; } }
+        public float Value
+        {
+            get
+            {
+                if (Type == NeuronType.Bias)
+                    return 1;
+                else
+                    return _value;
+            }
+            set { _value = value; Acson.Value = value; }
+        }
         #endregion
 
+        /// <summary>
+        /// the method calculates neuron value. 
+        /// since one neuron can have many connections with another neurons, the neuron value should be calculated as 
+        /// sigmoid(x) where x is a sum of multiplications the previous neuron value on dendrite weight
+        /// e=sum(v*w)
+        /// </summary>
         public void CalcuateValue()
         {
-            var sum = CalcuateSumOfWeight(Dendrites);
+            var sum = 0F;
+            foreach (var dendrite in Dendrites)
+            {
+                sum = sum + dendrite.Acson.Value * dendrite.Value;
+            }
+
             Value = ActivationFunction(sum);
             Acson.Value = Value;
         }
 
-        public float CalcuateSumOfWeight(IEnumerable<Dendrite> dendrites)
+        internal void CalculateError()
         {
-            if (dendrites.Count() == 0)
-                return 0;
+            if (Acson == null)
+                return;
 
-            var sum = 0F;
-            foreach (var dendrite in dendrites)
+            var error = 0F;
+            for (int j = 0; j < Acson.Dendrites.Count; j++)
             {
-                var acson = dendrite.Acson;
-                if (acson == null)
-                    return 0;
-                sum = sum + acson.Value * dendrite.Value;
+                var dendrite = Acson.Dendrites[j];
+                error += dendrite.Value * dendrite.Neuron.Error;
             }
-
-            return sum;
+            Error = error;
         }
     }
 }
